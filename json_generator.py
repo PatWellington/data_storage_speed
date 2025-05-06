@@ -439,7 +439,7 @@ class SchoolDataGenerator:
     
     def save_json(self, data: Dict[str, Any], filename: Optional[str] = None) -> str:
         """
-        Save data to a JSON file.
+        Save data to a JSON file atomically to prevent race conditions.
         
         Args:
             data: Data to save
@@ -453,11 +453,17 @@ class SchoolDataGenerator:
             filename = f"school_data_{timestamp}.json"
         
         file_path = self.output_dir / filename
+        # Create a temporary file path with .tmp extension
+        temp_path = file_path.with_suffix('.tmp')
         
-        with open(file_path, 'w') as f:
+        # Write to the temporary file first
+        with open(temp_path, 'w') as f:
             json.dump(data, f, indent=2)
         
-        logger.info(f"Saved data to {file_path}")
+        # Atomic rename operation to ensure files are completely written before being visible
+        temp_path.rename(file_path)
+        
+        logger.info(f"Saved data to {file_path} (atomically)")
         return str(file_path)
 
 
