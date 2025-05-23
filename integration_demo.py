@@ -151,6 +151,7 @@ class EnhancedSystemDemo:
                     shutil.move(str(file_path), str(dest_path))
                     processed_count += 1
             
+            listener.finalize_processing()
             end_time = time.time()
             
             # Get schema information

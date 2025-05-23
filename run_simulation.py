@@ -47,7 +47,6 @@ def run_generator(args):
     if args.seed is not None:
         cmd.extend(["--seed", str(args.seed)])
     
-<<<<<<< HEAD
     logger.info(f"Starting JSON generator: {' '.join(cmd)}")
     return subprocess.Popen(cmd)
 
@@ -380,6 +379,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-=======
-    logger.info(f"Starting
->>>>>>> 5ce3b438e481791e91aea1caa499710a607890da

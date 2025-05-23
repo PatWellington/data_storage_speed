@@ -9,6 +9,7 @@ referential integrity, capacity constraints, and relationship validation.
 import pandas as pd
 import json
 import logging
+import numpy as np
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set, Tuple
 from dataclasses import dataclass, field
@@ -505,6 +506,8 @@ class DataQualityValidator:
             },
             "detailed_results": [
                 {
+                # Ensure details are serializable
+                "details": {k: (int(v) if isinstance(v, np.int64) else v) for k, v in result.details.items()},
                     "check_name": result.check_name,
                     "passed": result.passed,
                     "message": result.message,
@@ -518,8 +521,20 @@ class DataQualityValidator:
         }
         
         report_path = self.output_dir / filename
+        
+        # Custom encoder for numpy types
+        class NpEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, np.integer):
+                    return int(obj)
+                if isinstance(obj, np.floating):
+                    return float(obj)
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                return super(NpEncoder, self).default(obj)
+
         with open(report_path, 'w') as f:
-            json.dump(report_data, f, indent=2)
+            json.dump(report_data, f, indent=2, cls=NpEncoder)
         
         logger.info(f"Validation report saved to {report_path}")
         
