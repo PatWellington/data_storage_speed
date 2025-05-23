@@ -2,3 +2,12 @@ input
 output
 processed
 *.log
+demo_run
+enhanced_demo
+complete_demo
+test_run
+original_output
+enhanced_input
+enhanced_output
+adaptive_listener.log
+__pycache__

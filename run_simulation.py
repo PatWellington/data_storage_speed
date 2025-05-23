@@ -77,6 +77,7 @@ def monitor_processes(processes, timeout=None):
     """Monitor processes and handle cleanup."""
     start_time = time.time()
     generator_process = processes[0]  # Assume first process is the generator
+    listener_process = processes[1] if len(processes) > 1 else None
     
     try:
         while any(p.poll() is None for p in processes):
@@ -96,18 +97,22 @@ def monitor_processes(processes, timeout=None):
     except KeyboardInterrupt:
         logger.info("Received interrupt. Stopping processes...")
         
-        # Terminate all processes on interrupt
-        for p in processes:
+        # Gracefully terminate all processes on interrupt
+        for i, p in enumerate(processes):
             if p.poll() is None:  # Process is still running
-                p.terminate()
-        
-        # Wait for processes to terminate
-        for p in processes:
-            try:
-                p.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                logger.warning(f"Process {p.pid} did not terminate gracefully. Killing...")
-                p.kill()
+                process_name = "generator" if i == 0 else "listener"
+                logger.info(f"Terminating {process_name} process (PID: {p.pid})")
+                try:
+                    p.terminate()
+                    p.wait(timeout=10)  # Give more time for graceful shutdown
+                    logger.info(f"{process_name} process terminated gracefully")
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"{process_name} process did not terminate gracefully. Forcing kill...")
+                    p.kill()
+                    p.wait(timeout=5)
+                    logger.warning(f"{process_name} process killed")
+                except Exception as e:
+                    logger.error(f"Error terminating {process_name} process: {e}")
 
 
 def display_performance_metrics(input_dir, output_dir, start_time, end_time, expected_count=None):
@@ -329,14 +334,23 @@ def main():
         # Give the listener extra time to finish processing all files
         time.sleep(args.completion_wait)
         
-        # Now terminate the listener
+        # Now terminate the listener gracefully
         if listener_process.poll() is None:
-            listener_process.terminate()
+            logger.info("Terminating listener process...")
             try:
-                listener_process.wait(timeout=5)
+                listener_process.terminate()
+                listener_process.wait(timeout=10)
+                logger.info("Listener process terminated gracefully")
             except subprocess.TimeoutExpired:
-                logger.warning("Listener process did not terminate gracefully. Killing...")
+                logger.warning("Listener process did not terminate gracefully. Forcing kill...")
                 listener_process.kill()
+                try:
+                    listener_process.wait(timeout=5)
+                    logger.warning("Listener process killed")
+                except subprocess.TimeoutExpired:
+                    logger.error("Failed to kill listener process")
+            except Exception as e:
+                logger.error(f"Error terminating listener process: {e}")
     
     # Record end time
     end_time = time.time()
