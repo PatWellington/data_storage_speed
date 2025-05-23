@@ -556,6 +556,68 @@ Total Tables: {schema_summary['total_tables']}
             except Exception as e:
                 logger.error(f"Unexpected error: {e}")
                 time.sleep(self.check_interval)
+        
+        self.finalize_processing()
+
+    def _update_class_enrollment_counts(self):
+        """Update current_enrollment in classes.parquet based on student_classes.parquet."""
+        logger.info("Attempting to update class enrollment counts...")
+        classes_table_name = "classes"
+        enrollments_table_name = "student_classes"
+
+        if classes_table_name not in self.schema_detector.schemas or \
+           enrollments_table_name not in self.schema_detector.schemas:
+            logger.warning(
+                f"Cannot update enrollments: '{classes_table_name}' or '{enrollments_table_name}' not in detected schemas."
+            )
+            return
+
+        classes_parquet_path = self.output_dir / f"{classes_table_name}.parquet"
+        enrollments_parquet_path = self.output_dir / f"{enrollments_table_name}.parquet"
+
+        if not classes_parquet_path.exists() or not enrollments_parquet_path.exists():
+            logger.warning(
+                f"Cannot update enrollments: Parquet file for '{classes_table_name}' or '{enrollments_table_name}' does not exist."
+            )
+            return
+
+        try:
+            df_enrollments = pd.read_parquet(enrollments_parquet_path)
+            if "class_id" not in df_enrollments.columns:
+                logger.warning(f"Cannot update enrollments: 'class_id' column not found in {enrollments_table_name}.parquet.")
+                return
+            
+            enrollment_counts = df_enrollments["class_id"].value_counts().rename("actual_enrollments")
+
+            df_classes = pd.read_parquet(classes_parquet_path)
+            if "class_id" not in df_classes.columns:
+                logger.warning(f"Cannot update enrollments: 'class_id' column not found in {classes_table_name}.parquet.")
+                return
+
+            # Merge enrollment counts
+            df_classes = df_classes.merge(enrollment_counts, on="class_id", how="left")
+            
+            # Update or create current_enrollment
+            if "current_enrollment" in df_classes.columns:
+                df_classes["current_enrollment"] = df_classes["actual_enrollments"].fillna(0).astype(int)
+            else:
+                df_classes["current_enrollment"] = df_classes["actual_enrollments"].fillna(0).astype(int)
+            
+            # Clean up temporary column
+            if "actual_enrollments" in df_classes.columns:
+                df_classes = df_classes.drop(columns=["actual_enrollments"])
+
+            pq.write_table(pa.Table.from_pandas(df_classes, preserve_index=False), classes_parquet_path)
+            logger.info(f"Successfully updated 'current_enrollment' in {classes_parquet_path}")
+
+        except Exception:
+            logger.error("Failed to update class enrollment counts.", exc_info=True)
+
+    def finalize_processing(self):
+        """Finalize processing by updating enrollment counts."""
+        logger.info("Finalizing processing...")
+        self._update_class_enrollment_counts()
+        logger.info("Processing finalized.")
 
 
 def main():
